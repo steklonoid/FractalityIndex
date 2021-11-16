@@ -1,0 +1,8 @@
+QTableWidget {
+    background-color: rgb(200, 232, 232);
+    gridline-color: #708090;
+    font: bold 10px;}
+
+QSplitter#vsplitter::handle {
+    background-color: red;
+    height: 2px}
