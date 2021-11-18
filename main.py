@@ -54,18 +54,17 @@ class MainWindow(QMainWindow, UiMainWindow):
         bars = np.concatenate((bars1, bars2, bars3, bars4, bars5, bars6, bars7, bars8, bars9, bars10))
         print(bars.shape)
 
-        f1_up = calc_fractals(1, bars[:, [0, 1, 3]])
-        f1_down = calc_fractals(0, bars[:, [0, 2, 3]])
-        print(f1_up.shape, f1_down.shape)
-        f1_up = calc_fractals(1, f1_up)
-        f1_down = calc_fractals(0, f1_down)
-        print(f1_up.shape, f1_down.shape)
-        f1_up = calc_fractals(1, f1_up)
-        f1_down = calc_fractals(0, f1_down)
-        print(f1_up.shape, f1_down.shape)
-        f1_up = calc_fractals(1, f1_up)
-        f1_down = calc_fractals(0, f1_down)
-        print(f1_up.shape, f1_down.shape)
+        f_set = {}
+        f_rank = 0
+        f_up = bars[:, [0, 1, 3]]
+        f_down = bars[:, [0, 2, 3]]
+        while f_up.shape[0] > 4 or f_down.shape[0] > 4:
+            f_up = calc_fractals(1, f_up)
+            f_down = calc_fractals(0, f_down)
+            f_rank += 1
+            f_set[f_rank] = {'f_up': f_up, 'f_down': f_down}
+
+        print(f_set)
 
         # bars_re = np.reshape(bars, (-1, 10))
         # print(bars_re.shape)
