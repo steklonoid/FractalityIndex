@@ -28,44 +28,55 @@ class MainWindow(QMainWindow, UiMainWindow):
             for i in range(2, len_s - 3):
                 sumvol += s[i, 2]
                 fl = False
-                if mode == 1:
-                    if s[i, 1] == max(s[i - 2, 1], s[i - 1, 1], s[i, 1], s[i + 1, 1], s[i + 2, 1]):
+                if mode == 1 and s[i, 1] > s[i - 2, 1] and  s[i, 1] > s[i - 1, 1] and s[i, 1] > s[i + 1, 1] and s[i, 1] > s[i + 2, 1]:
                         fl = True
-                else:
-                    if s[i, 1] == min(s[i - 2, 1], s[i - 1, 1], s[i, 1], s[i + 1, 1], s[i + 2, 1]):
+                elif mode == 0 and s[i, 1] < s[i - 2, 1] and  s[i, 1] < s[i - 1, 1] and s[i, 1] < s[i + 1, 1] and s[i, 1] < s[i + 2, 1]:
                         fl = True
                 if fl:
                     s_out.append([s[i, 0], s[i, 1], sumvol])
                     sumvol = 0
             return np.array(s_out)
 
-        bars1 = np.genfromtxt('./data/BTCUSDT-1m-2021-01.csv', delimiter=',')[:,[0, 2, 3, 5]]
-        bars2 = np.genfromtxt('./data/BTCUSDT-1m-2021-02.csv', delimiter=',')[:, [0, 2, 3, 5]]
-        bars3 = np.genfromtxt('./data/BTCUSDT-1m-2021-03.csv', delimiter=',')[:, [0, 2, 3, 5]]
-        bars4 = np.genfromtxt('./data/BTCUSDT-1m-2021-04.csv', delimiter=',')[:, [0, 2, 3, 5]]
-        bars5 = np.genfromtxt('./data/BTCUSDT-1m-2021-05.csv', delimiter=',')[:, [0, 2, 3, 5]]
-        bars6 = np.genfromtxt('./data/BTCUSDT-1m-2021-06.csv', delimiter=',')[:, [0, 2, 3, 5]]
-        bars7 = np.genfromtxt('./data/BTCUSDT-1m-2021-07.csv', delimiter=',')[:, [0, 2, 3, 5]]
-        bars8 = np.genfromtxt('./data/BTCUSDT-1m-2021-08.csv', delimiter=',')[:, [0, 2, 3, 5]]
-        bars9 = np.genfromtxt('./data/BTCUSDT-1m-2021-09.csv', delimiter=',')[:, [0, 2, 3, 5]]
-        bars10 = np.genfromtxt('./data/BTCUSDT-1m-2021-10.csv', delimiter=',')[:, [0, 2, 3, 5]]
+        #   читает файлы, полученные с https://data.binance.vision/
+        #   формат файлов: CSV - файлы, значения разделенные запятыми,
+        #   значения полей слева направо:
+        #   Open time /	Open / High / Low / Close / Volume / Close time / Quote asset volume / Number of trades / Taker buy base asset volume / Taker buy quote asset volume / Ignore
 
-        # bars [time, high, low, volume]
-        bars = np.concatenate((bars1, bars2, bars3, bars4, bars5, bars6, bars7, bars8, bars9, bars10))
-        print(bars.shape)
+        listcol = [0, 1, 2, 3, 4, 5]        # Time / Open / High / Low / Close / Volume
+        bars01 = np.genfromtxt('./data/BTCUSDT-1m-2021-01.csv', delimiter=',')[:, listcol]
+        bars02 = np.genfromtxt('./data/BTCUSDT-1m-2021-02.csv', delimiter=',')[:, listcol]
+        bars03 = np.genfromtxt('./data/BTCUSDT-1m-2021-03.csv', delimiter=',')[:, listcol]
+        bars04 = np.genfromtxt('./data/BTCUSDT-1m-2021-04.csv', delimiter=',')[:, listcol]
+        bars05 = np.genfromtxt('./data/BTCUSDT-1m-2021-05.csv', delimiter=',')[:, listcol]
+        bars06 = np.genfromtxt('./data/BTCUSDT-1m-2021-06.csv', delimiter=',')[:, listcol]
+        bars07 = np.genfromtxt('./data/BTCUSDT-1m-2021-07.csv', delimiter=',')[:, listcol]
+        bars08 = np.genfromtxt('./data/BTCUSDT-1m-2021-08.csv', delimiter=',')[:, listcol]
+        bars09 = np.genfromtxt('./data/BTCUSDT-1m-2021-09.csv', delimiter=',')[:, listcol]
+        bars10 = np.genfromtxt('./data/BTCUSDT-1m-2021-10.csv', delimiter=',')[:, listcol]
+
+        bars = np.concatenate((bars01, bars02, bars03, bars04, bars05, bars06, bars07, bars08, bars09, bars10))
+        bars[:, 0] //= 1000
+        self.graphicsView.bararray = np.flip(bars, axis=0)
+        self.graphicsView.repaint()
 
         f_set = {}
         f_rank = 0
-        f_up = bars[:, [0, 1, 3]]
-        f_down = bars[:, [0, 2, 3]]
+        f_up = bars[:, [0, 2, 5]]
+        f_down = bars[:, [0, 3, 5]]
         while f_up.shape[0] > 4 or f_down.shape[0] > 4:
             f_up = calc_fractals(1, f_up)
             f_down = calc_fractals(0, f_down)
             f_rank += 1
             f_set[f_rank] = {'f_up': f_up, 'f_down': f_down}
 
-        print(f_set)
+        self.graphicsView.fractaluparray = np.flip(np.array(f_set[3]['f_up']), axis=0)
+        self.graphicsView.fractaldownarray = np.flip(np.array(f_set[3]['f_down']), axis=0)
+        self.graphicsView.repaint()
 
+        print({k:[len(v['f_up']), len(v['f_down'])] for k, v in f_set.items()})
+        # print(f_set[16])
+        # print(f_set[17])
+        # print(f_set[18])
         # bars_re = np.reshape(bars, (-1, 10))
         # print(bars_re.shape)
 
