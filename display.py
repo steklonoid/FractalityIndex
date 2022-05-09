@@ -1,7 +1,7 @@
 import math
-from PyQt5.QtCore import Qt, QRectF, QLineF, QPointF
-from PyQt5.QtGui import QPainter, QPen, QBrush, QPixmap, QMouseEvent, QWheelEvent, QFont, QColor
-from PyQt5.QtWidgets import QWidget, QSizePolicy
+from PyQt6.QtCore import Qt, QRectF, QLineF, QPointF
+from PyQt6.QtGui import QPainter, QPen, QBrush, QPixmap, QMouseEvent, QWheelEvent, QFont, QColor
+from PyQt6.QtWidgets import QWidget, QSizePolicy
 import numpy as np
 from datetime import datetime
 
@@ -9,7 +9,7 @@ from datetime import datetime
 class DisplayField(QWidget):
     def __init__(self):
         QWidget.__init__(self)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.setContentsMargins(0, 0, 0, 0)
         self.bararray = np.zeros((0, 6))    #   t / o / h / l / c / vol
         self.fractaluparray = np.zeros((0, 3))
@@ -35,33 +35,33 @@ class DisplayField(QWidget):
         self.balance = 0
         self.tradescount = 0
 
-        self.down_bar_pen = QPen(Qt.darkYellow)
-        self.down_bar_brush = QBrush(Qt.darkYellow)
-        self.up_bar_pen = QPen(Qt.darkYellow)
-        self.up_bar_brush = QBrush(Qt.black)
-        self.fractalpen = QPen(Qt.red)
-        self.trade_line_pen = QPen(Qt.white)
+        self.down_bar_pen = QPen(Qt.GlobalColor.darkYellow)
+        self.down_bar_brush = QBrush(Qt.GlobalColor.darkYellow)
+        self.up_bar_pen = QPen(Qt.GlobalColor.darkYellow)
+        self.up_bar_brush = QBrush(Qt.GlobalColor.black)
+        self.fractalpen = QPen(Qt.GlobalColor.red)
+        self.trade_line_pen = QPen(Qt.GlobalColor.white)
         self.trade_line_pen.setWidth(3)
-        self.trade_line_pen.setStyle(Qt.DashLine)
+        self.trade_line_pen.setStyle(Qt.PenStyle.DashLine)
         self.open_buy_position = QPixmap()
         self.open_buy_position.load("./up_arrow_short_small.png")
         self.open_sell_position = QPixmap()
         self.open_sell_position.load("./down_arrow_short_small.png")
-        self.close_plus_position = QPen(Qt.green)
+        self.close_plus_position = QPen(Qt.GlobalColor.green)
         self.close_plus_position.setWidth(5)
-        self.close_minus_position = QPen(Qt.red)
+        self.close_minus_position = QPen(Qt.GlobalColor.red)
         self.close_minus_position.setWidth(5)
-        self.fontinfo = QFont("Helvetica", 10, QFont.Bold)
-        self.fontaxe = QFont("Helvetica", 8, QFont.Normal)
+        self.fontinfo = QFont("Helvetica", 10, QFont.Weight.Bold)
+        self.fontaxe = QFont("Helvetica", 8, QFont.Weight.Normal)
         self.axes_pen = QPen(QColor(128, 128, 128))
         self.axes_pen.setWidth(2)
         self.grid_pen = QPen(QColor(128, 128, 128))
-        self.grid_pen.setStyle(Qt.DotLine)
+        self.grid_pen.setStyle(Qt.PenStyle.DotLine)
 
     def clearView(self, painter):
         self.width = painter.viewport().width()  # текущая ширина окна рисования
         self.height = painter.viewport().height()  # текущая высота окна рисования
-        painter.fillRect(0, 0, self.width, self.height, Qt.black)  # очищаем окно (черный цвет)
+        painter.fillRect(0, 0, self.width, self.height, Qt.GlobalColor.black)  # очищаем окно (черный цвет)
 
     def drawAxes(self, painter):
         painter.setPen(self.axes_pen)
@@ -104,14 +104,14 @@ class DisplayField(QWidget):
                 if aclose[i] < aopen[i]: #  down bar
                     painter.setPen(self.down_bar_pen)
                     painter.drawLine(QLineF(centerx, alow[i], centerx, aopen[i]))
-                    painter.fillRect(ax[i], aclose[i], barwidth, aopen[i] - aclose[i], self.down_bar_brush)
-                    painter.drawRect(ax[i], aclose[i], barwidth, aopen[i] - aclose[i])
+                    painter.fillRect(QRectF(ax[i], aclose[i], barwidth, aopen[i] - aclose[i]), self.down_bar_brush)
+                    painter.drawRect(QRectF(ax[i], aclose[i], barwidth, aopen[i] - aclose[i]))
                     painter.drawLine(QLineF(centerx, aclose[i], centerx, ahigh[i]))
                 else:
                     painter.setPen(self.up_bar_pen)
                     painter.drawLine(QLineF(centerx, alow[i], centerx, aclose[i]))
-                    painter.fillRect(ax[i], aopen[i], barwidth, aclose[i] - aopen[i], self.up_bar_brush)
-                    painter.drawRect(ax[i], aopen[i], barwidth, aclose[i] - aopen[i])
+                    painter.fillRect(QRectF(ax[i], aopen[i], barwidth, aclose[i] - aopen[i]), self.up_bar_brush)
+                    painter.drawRect(QRectF(ax[i], aopen[i], barwidth, aclose[i] - aopen[i]))
                     painter.drawLine(QLineF(centerx, aopen[i], centerx, ahigh[i]))
 
             #   отрисовка фракталов
@@ -143,8 +143,8 @@ class DisplayField(QWidget):
             painter.setPen(self.grid_pen)
             painter.setFont(self.fontaxe)
             for i in range(masrisy.shape[0]):
-                painter.drawLine(0, masrisy[i], self.width - self.rightshiftx, masrisy[i])
-                painter.drawText(self.width - self.rightshiftx + 5, masrisy[i], str(int(masris[i])))
+                painter.drawLine(QLineF(0, masrisy[i], self.width - self.rightshiftx, masrisy[i]))
+                painter.drawText(QPointF(self.width - self.rightshiftx + 5, masrisy[i]), str(int(masris[i])))
 
             # #   отрисовка оси x
             # minpx = 200
@@ -173,10 +173,10 @@ class DisplayField(QWidget):
     def mouseMoveEvent(self, a0: QMouseEvent) -> None:
         if self.bararray.shape[0] > 0:
             if self.mousemovexpos != 0:
-                delta = a0.x() - self.mousemovexpos
+                delta = a0.pos().x() - self.mousemovexpos
                 self.timeshift += delta / self.scalex
                 self.timeshift = max(0, self.timeshift)
-            self.mousemovexpos = a0.x()
+            self.mousemovexpos = a0.pos().x()
             self.repaint()
 
     def mouseReleaseEvent(self, a0: QMouseEvent) -> None:
