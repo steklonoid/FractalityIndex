@@ -22,7 +22,7 @@ class UiMainWindow(object):
         self.centralwidget.setLayout(self.gridLayout)
 
         self.graphicsView = DisplayField()
-        self.gridLayout.addWidget(self.graphicsView, 0, 0, 3, 1)
+        self.gridLayout.addWidget(self.graphicsView, 0, 0, 5, 1)
 
         self.pb_start = QPushButton()
         self.pb_start.setText('START')
@@ -38,6 +38,15 @@ class UiMainWindow(object):
         self.pb_profit.setText('Расчет прибыли')
         self.pb_profit.clicked.connect(mainwindow.pb_profit_clicked)
         self.gridLayout.addWidget(self.pb_profit, 1, 2, 1, 1)
+
+        self.cb_period = QComboBox()
+        self.cb_period.addItems(['60', '240', '1440'])
+        self.gridLayout.addWidget(self.cb_period, 2, 1, 1, 1)
+
+        self.pb_work = QPushButton()
+        self.pb_work.setText('Работы разные')
+        self.pb_work.clicked.connect(mainwindow.pb_work_clicked)
+        self.gridLayout.addWidget(self.pb_work, 3, 1, 1, 1)
 
 
 
