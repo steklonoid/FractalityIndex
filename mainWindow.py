@@ -1,5 +1,6 @@
-
-from PyQt6.QtWidgets import QWidget, QGridLayout, QPushButton, QLabel, QComboBox, QVBoxLayout, QSplitter, QSizePolicy, QTableWidget, QHeaderView
+from PyQt6.QtCore import QRect
+from PyQt6.QtWidgets import QWidget, QGridLayout, QPushButton, QLabel, QComboBox, QMenuBar
+from PyQt6.QtGui import QAction
 from display import DisplayField
 
 
@@ -24,6 +25,19 @@ class UiMainWindow(object):
         self.graphicsView = DisplayField()
         self.gridLayout.addWidget(self.graphicsView, 0, 0, 5, 1)
 
+        self.menubar = QMenuBar()
+        self.menubar.setGeometry(QRect(0, 0, 800, 21))
+        self.menubar.setObjectName("menubar")
+        mainwindow.setMenuBar(self.menubar)
+
+        self.filemenu = self.menubar.addMenu("Операции")
+        self.loadbars = QAction("Загрузка баров из файлов", self)
+        self.loadbars.triggered.connect(mainwindow.pb_start_clicked)
+        self.filemenu.addAction(self.loadbars)
+        self.charcalc = QAction("Расчет характеристик с выгрузкой в файл", self)
+        self.charcalc.triggered.connect(mainwindow.charcalc_triggered)
+        self.filemenu.addAction(self.charcalc)
+
         self.pb_start = QPushButton()
         self.pb_start.setText('START')
         self.pb_start.clicked.connect(mainwindow.pb_start_clicked)
@@ -47,6 +61,11 @@ class UiMainWindow(object):
         self.pb_work.setText('Работы разные')
         self.pb_work.clicked.connect(mainwindow.pb_work_clicked)
         self.gridLayout.addWidget(self.pb_work, 3, 1, 1, 1)
+
+        self.pb_nn = QPushButton()
+        self.pb_nn.setText('Нейросеть')
+        self.pb_nn.clicked.connect(mainwindow.pb_nn_clicked)
+        self.gridLayout.addWidget(self.pb_nn, 3, 2, 1, 1)
 
 
 

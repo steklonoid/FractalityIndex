@@ -39,7 +39,8 @@ class DisplayField(QWidget):
         self.down_bar_brush = QBrush(Qt.GlobalColor.darkYellow)
         self.up_bar_pen = QPen(Qt.GlobalColor.darkYellow)
         self.up_bar_brush = QBrush(Qt.GlobalColor.black)
-        self.fractalpen = QPen(Qt.GlobalColor.red)
+        self.fractaluppen = QPen(Qt.GlobalColor.green)
+        self.fractaldownpen = QPen(Qt.GlobalColor.red)
         self.trade_line_pen = QPen(Qt.GlobalColor.white)
         self.trade_line_pen.setWidth(3)
         self.trade_line_pen.setStyle(Qt.PenStyle.DashLine)
@@ -115,13 +116,14 @@ class DisplayField(QWidget):
                     painter.drawLine(QLineF(centerx, aopen[i], centerx, ahigh[i]))
 
             #   отрисовка фракталов
-            painter.setPen(self.fractalpen)
+            painter.setPen(self.fractaluppen)
             a = self.fractaluparray[self.fractaluparray[:, 0] > lefttime]
             ax = np.multiply(a[:, 0], self.scalex) + bx
             ay = np.multiply(a[:, 1], -self.scaley) + by
             for i in range(0, a.shape[0]):
                 centerx = ax[i] + barwidth / 2
                 painter.drawEllipse(QPointF(centerx, ay[i]), 5, 5)
+            painter.setPen(self.fractaldownpen)
             a = self.fractaldownarray[self.fractaldownarray[:, 0] > lefttime]
             ax = np.multiply(a[:, 0], self.scalex) + bx
             ay = np.multiply(a[:, 1], -self.scaley) + by
