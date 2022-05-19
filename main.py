@@ -1,5 +1,6 @@
+import math
 import sys
-from PyQt6.QtWidgets import QMainWindow, QApplication
+from PyQt6.QtWidgets import QMainWindow, QApplication, QFileDialog
 from mainWindow import UiMainWindow
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -37,9 +38,117 @@ class MainWindow(QMainWindow, UiMainWindow):
         # создание визуальной формы
         self.setupui(self)
         self.show()
-
+        self.filename = 'BTCUSDT-0521-0422-12month'
         # метапараметры:
 
+    def loadbars_triggered(self):
+
+        #   читает файлы, полученные с https://data.binance.vision/
+        #   формат файлов: CSV - файлы, значения разделенные запятыми,
+        #   значения полей слева направо:
+        #   Open time /	Open / High / Low / Close / Volume / Close time / Quote asset volume / Number of trades / Taker buy base asset volume / Taker buy quote asset volume / Ignore
+        listcol = [0, 1, 2, 3, 4, 5]        # Time / Open / High / Low / Close / Volume
+        t1 = time.time()
+        bars05 = np.genfromtxt('./data/BTCUSDT-1m-2021-05.csv', delimiter=',')[:, listcol]
+        bars06 = np.genfromtxt('./data/BTCUSDT-1m-2021-06.csv', delimiter=',')[:, listcol]
+        bars07 = np.genfromtxt('./data/BTCUSDT-1m-2021-07.csv', delimiter=',')[:, listcol]
+        bars08 = np.genfromtxt('./data/BTCUSDT-1m-2021-08.csv', delimiter=',')[:, listcol]
+        bars09 = np.genfromtxt('./data/BTCUSDT-1m-2021-09.csv', delimiter=',')[:, listcol]
+        bars10 = np.genfromtxt('./data/BTCUSDT-1m-2021-10.csv', delimiter=',')[:, listcol]
+        bars11 = np.genfromtxt('./data/BTCUSDT-1m-2021-11.csv', delimiter=',')[:, listcol]
+        bars12 = np.genfromtxt('./data/BTCUSDT-1m-2021-12.csv', delimiter=',')[:, listcol]
+        bars01 = np.genfromtxt('./data/BTCUSDT-1m-2022-01.csv', delimiter=',')[:, listcol]
+        bars02 = np.genfromtxt('./data/BTCUSDT-1m-2022-02.csv', delimiter=',')[:, listcol]
+        bars03 = np.genfromtxt('./data/BTCUSDT-1m-2022-03.csv', delimiter=',')[:, listcol]
+        bars04 = np.genfromtxt('./data/BTCUSDT-1m-2022-04.csv', delimiter=',')[:, listcol]
+
+
+        bars = np.concatenate((bars05, bars06, bars07, bars08, bars09, bars10, bars11, bars12, bars01, bars02, bars03, bars04, ))
+        self.bars = bars
+        self.bars[:, 0] //= 1000
+        self.graphicsView.bararray = np.flip(self.bars, axis=0)
+        self.graphicsView.repaint()
+        t = time.time() - t1
+        print(t, self.bars.shape)
+
+    def charcalc_triggered(self, f=1440):
+        t1 = time.time()
+        x = []
+        f = 1440
+        lnbars = np.log(self.bars[:, [2, 3, 4]]) # 0, 1, 2 // high, low, close
+        for i in range(self.bars.shape[0] - f):
+            hmax = np.amax(lnbars[i:i + f, 0], axis=0)
+            lmin = np.amin(lnbars[i:i + f, 1], axis=0)
+            maxclose = hmax - lnbars[i, 2]
+            minclose = lmin - lnbars[i, 2]
+            add = maxclose + minclose
+            diff = maxclose - minclose
+            maxof = max(maxclose, -minclose)
+            diffmaxof = diff - maxof
+            x.append([self.bars[i, 0], lnbars[i, 2], hmax, lmin, maxclose, minclose, add, diff, maxof, diffmaxof])
+        t = time.time() - t1
+        df = pd.DataFrame(x,
+                          columns=['time', 'close', 'hmax', 'lmin', 'maxclose', 'minclose', 'add', 'diff', 'maxof', 'diffmaxof'])
+        print(t, df.shape)
+        df.to_csv('./data/' + self.filename + '_charcalc_' + str(f) + '.csv', index=False)
+
+    def quantMAXOF_triggered(self, d=0.01):
+        filename, _ = QFileDialog.getOpenFileName(self, "Open File", "./data/", "CSV file (*.csv)")
+        df = pd.read_csv(filename, dtype='float64')
+        df_add = df['maxof']
+        d = 0.02
+        bins = [0, d, math.inf]
+        t1 = time.time()
+        df['maxof_class'] = pd.cut(df_add, bins=bins, labels=[0, 1])
+        t = time.time() - t1
+        print(t, df.shape)
+        df.to_csv('./data/' + self.filename + '_quantMAXOF_' + str(d) + '.csv', index=False)
+
+
+    def quantfrac_triggered(self):
+        def mnk(xlist, ylist):
+            n = np.size(xlist)
+            sx = np.sum(xlist)
+            sy = np.sum(ylist)
+            sxy = np.sum(np.multiply(xlist, ylist))
+            sxx = np.sum(np.square(xlist))
+            a = (n * sxy - sx * sy) / (n * sxx - sx * sx)
+            b = (sy - a * sx) / n
+            sigma = np.sum(np.square(np.subtract(ylist, a * xlist + b)))
+            return (a, b, sigma)
+
+        t1 = time.time()
+        intervals = np.array([5, 15, 60, 240, 1440])
+        lastinterval = intervals[-1]
+        interval_log = np.log(intervals)
+        x = []
+        for i in range(lastinterval, self.bars.shape[0]):
+            list_bar = self.bars[i - lastinterval:i, [2, 3]]
+            vj = [np.sum(np.subtract(np.amax(np.reshape(list_bar[:, [0]], (interval, -1)), axis=1),
+                                     np.amin(np.reshape(list_bar[:, [1]], (interval, -1)), axis=1))) for
+                  interval in intervals]
+            vj_log = np.log(vj)
+            (a, b, sigma) = mnk(interval_log, vj_log)
+            x.append([self.bars[i, 0], a, b, sigma])
+
+        t = time.time() - t1
+        df = pd.DataFrame(x,
+                          columns=['time', 'a', 'b', 'sigma'])
+        print(t, df.shape)
+        df.to_csv('./data/' + self.filename + '_quantfrac_' + str(lastinterval) + '.csv', index=False)
+
+    def trainNN_triggered(self):
+        f1, _ = QFileDialog.getOpenFileName(self, "Open _quantMAXOF_ ", "./data/", "CSV file (*.csv)")
+        f2, _ = QFileDialog.getOpenFileName(self, "Open _quantfrac_ ", "./data/", "CSV file (*.csv)")
+        t1 = time.time()
+        df1 = pd.read_csv(f1, dtype='float64')
+        df2 = pd.read_csv(f2, dtype='float64')
+        df = pd.merge(left=df1, right=df2, left_on='time', right_on='time')
+        t = time.time() - t1
+        print(t, df.shape)
+        df.to_csv('./data/' + self.filename + '_forNN_.csv', index=False)
+
+   # ------------------------------------------------------------------------
 
     def pb_nn_clicked(self):
         # number;time;open;hmax;lmin;MAXOPEN;MINOPEN;a;b;sigma;ADD;ADD Номер интервала;DIFF;DIFF Номер интервала;MAXOF;MAXOF Номер интервала;DIFFMAXOF;DIFFMAXOF Номер интервала
@@ -105,107 +214,6 @@ class MainWindow(QMainWindow, UiMainWindow):
         plt.ylabel('Loss')
         plt.legend()
         plt.show()
-
-
-    def _pb_nn_clicked(self):
-
-        def slider_window(data, past, future):
-            number_of_slices = data.shape[0] - past - future + 1
-            newdata = np.zeros((past, data.shape[1], number_of_slices))
-            for i in range(number_of_slices):
-                newdata[:, :, i] = data[i:i + past, :]
-            return newdata
-
-        # number;time;open;hmax;lmin;MAXOPEN;MINOPEN;a;b;sigma;ADD;ADD Номер интервала;DIFF;DIFF Номер интервала;MAXOF;MAXOF Номер интервала;DIFFMAXOF;DIFFMAXOF Номер интервала
-        preliminarydata = np.genfromtxt('./data/Quant.csv', delimiter=';', dtype='float32')
-        print('Входные данные: ', preliminarydata.shape)
-
-        #   разделение множества на тренировочное и обучающее
-        train_fraction = 0.8 # процент обучающего множества в исходных данных
-        num_train = int(train_fraction * int(preliminarydata.shape[0]))
-        values = preliminarydata[:, [7]]
-        labels = keras.utils.to_categorical(preliminarydata[:, [15]])
-        print('Данные и метки: ', values.shape, labels.shape)
-
-        train_values = values[:num_train]
-        train_labels = labels[:num_train]
-        test_values = values[num_train:]
-        test_labels = labels[num_train:]
-        print('Тренировочное и проверочное множества: ',train_values.shape, test_values.shape)
-
-        #   нормализация и подготовка данных
-        # mean = train_values.mean(axis=0)
-        # train_values -= mean
-        # std = train_values.std(axis=0)
-        # train_values /= std
-        # test_values -= mean
-        # test_values /= std
-
-        #   подготовка датасетов
-
-        past = 1440
-        future = 1
-        batch_size = 1
-
-        train_values = slider_window(train_values, past, future)
-        train_labels = train_labels[past:]
-        test_values = slider_window(test_values, past, future)
-        test_labels = test_labels[past:]
-
-        print(train_values.shape, train_labels.shape, test_values.shape, test_labels.shape)
-
-          # создание модели
-        model = models.Sequential()
-        model.add(layers.Dense(128, activation='relu', input_shape=(past, values.shape[1])))
-        # model.add(layers.LSTM(32))
-        model.add(layers.Dense(labels.shape[1], activation='softmax'))
-
-        model.compile(optimizer='rmsprop',
-                      loss='categorical_crossentropy',
-                      metrics=['accuracy'])
-        model.summary()
-        #
-        #   тренировка модели
-        history = model.fit(
-            train_values,
-            train_labels,
-            epochs=5,
-            validation_data=(test_values, test_labels),
-            batch_size=batch_size)
-
-
-
-
-    def pb_start_clicked(self):
-
-        #   читает файлы, полученные с https://data.binance.vision/
-        #   формат файлов: CSV - файлы, значения разделенные запятыми,
-        #   значения полей слева направо:
-        #   Open time /	Open / High / Low / Close / Volume / Close time / Quote asset volume / Number of trades / Taker buy base asset volume / Taker buy quote asset volume / Ignore
-        self.filename = 'BTCUSDT-0521-0422-12month'
-        listcol = [0, 1, 2, 3, 4, 5]        # Time / Open / High / Low / Close / Volume
-        t1 = time.time()
-        bars05 = np.genfromtxt('./data/BTCUSDT-1m-2021-05.csv', delimiter=',')[:, listcol]
-        bars06 = np.genfromtxt('./data/BTCUSDT-1m-2021-06.csv', delimiter=',')[:, listcol]
-        bars07 = np.genfromtxt('./data/BTCUSDT-1m-2021-07.csv', delimiter=',')[:, listcol]
-        bars08 = np.genfromtxt('./data/BTCUSDT-1m-2021-08.csv', delimiter=',')[:, listcol]
-        bars09 = np.genfromtxt('./data/BTCUSDT-1m-2021-09.csv', delimiter=',')[:, listcol]
-        bars10 = np.genfromtxt('./data/BTCUSDT-1m-2021-10.csv', delimiter=',')[:, listcol]
-        bars11 = np.genfromtxt('./data/BTCUSDT-1m-2021-11.csv', delimiter=',')[:, listcol]
-        bars12 = np.genfromtxt('./data/BTCUSDT-1m-2021-12.csv', delimiter=',')[:, listcol]
-        bars01 = np.genfromtxt('./data/BTCUSDT-1m-2022-01.csv', delimiter=',')[:, listcol]
-        bars02 = np.genfromtxt('./data/BTCUSDT-1m-2022-02.csv', delimiter=',')[:, listcol]
-        bars03 = np.genfromtxt('./data/BTCUSDT-1m-2022-03.csv', delimiter=',')[:, listcol]
-        bars04 = np.genfromtxt('./data/BTCUSDT-1m-2022-04.csv', delimiter=',')[:, listcol]
-
-
-        bars = np.concatenate((bars05, bars06, bars07, bars08, bars09, bars10, bars11, bars12, bars01, bars02, bars03, bars04, ))
-        self.bars = bars
-        self.bars[:, 0] //= 1000
-        self.graphicsView.bararray = np.flip(self.bars, axis=0)
-        self.graphicsView.repaint()
-        t = time.time() - t1
-        print(t, self.bars.shape)
 
     def pb_frac_clicked(self):
 
@@ -324,69 +332,6 @@ class MainWindow(QMainWindow, UiMainWindow):
         # sumvi = np.sum(self.bars[i:i + f, 2], axis=0) - np.sum(self.bars[i:i + f, 3], axis=0)
         # fill = sumvi / (f * (xmax - xmin))
 
-    def charcalc_triggered(self):
-        t1 = time.time()
-        f = int(self.cb_period.currentText())
-        x = []
-        lnbars = np.log(self.bars[:, [2, 3, 4]]) # high, low, close
-        for i in range(self.bars.shape[0] - f):
-            hmax = np.amax(lnbars[i:i + f, 0], axis=0)
-            lmin = np.amin(lnbars[i:i + f, 1], axis=0)
-            maxclose = hmax - lnbars[i, 2]
-            minclose = lmin - lnbars[i, 2]
-            add = maxclose + minclose
-            diff = maxclose - minclose
-            maxof = max(maxclose, -minclose)
-            diffmaxof = diff - maxof
-            x.append([self.bars[i, 0], lnbars[i, 2], hmax, lmin, maxclose, minclose, add, diff, maxof, diffmaxof])
-
-        t = time.time() - t1
-        df = pd.DataFrame(x,
-                          columns=['time', 'close', 'hmax', 'lmin', 'maxclose', 'minclose', 'add', 'diff', 'maxof', 'diffmaxof'])
-        print(t, df.shape)
-        df.to_csv('./data/' + self.filename + '_charcalc_' + str(f) + '.csv')
-
-
-
-    def pb_work_clicked(self):
-
-        def mnk(xlist, ylist):
-            n = np.size(xlist)
-            sx = np.sum(xlist)
-            sy = np.sum(ylist)
-            sxy = np.sum(np.multiply(xlist, ylist))
-            sxx = np.sum(np.square(xlist))
-            a = (n * sxy - sx * sy) / (n * sxx - sx * sx)
-            b = (sy - a * sx) / n
-            sigma = np.sum(np.square(np.subtract(ylist, a * xlist + b)))
-            return (a, b, sigma)
-
-        t1 = time.time()
-        f = int(self.cb_period.currentText())
-        intervals = np.array([1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024])
-        lastinterval = intervals[-1]
-        interval_log = np.log(intervals)
-        x = []
-        for i in range(lastinterval, self.bars.shape[0] - f):
-            hmax = np.amax(self.bars[i:i+f, 2], axis=0)
-            lmin = np.amin(self.bars[i:i + f, 3], axis=0)
-
-            list_bar = self.bars[i - lastinterval:i, [2, 3]]
-            vj = [np.sum(np.subtract(np.amax(np.reshape(list_bar[:, [0]], (interval, -1)), axis=1),
-                                     np.amin(np.reshape(list_bar[:, [1]], (interval, -1)), axis=1))) for
-                  interval in intervals]
-            vj_log = np.log(vj)
-            (a, b, sigma) = mnk(interval_log, vj_log)
-            x.append([self.bars[i, 0], self.bars[i, 1], hmax, lmin, a, b, sigma])
-
-        xnp = np.array(x, dtype=float)
-        t = time.time() - t1
-        print(t, ' : рассчитали hmax, lmin' )
-        np.savetxt('./data/' + self.filename + '_' + str(f) + '_forwardmaxmin.csv',
-                   xnp,
-                   fmt=['%.0f' ,'%.2f' ,'%.2f', '%.2f', '%.10f' ,'%.10f', '%.10f'],
-                   header='time, open, hmax, lmin, a, b, sigma',
-                   delimiter=',')
 
 
 app = QApplication([])
