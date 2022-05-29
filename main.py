@@ -2,29 +2,18 @@ import math
 import sys
 from PyQt6.QtWidgets import QMainWindow, QApplication, QFileDialog
 from mainWindow import UiMainWindow
-import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib import cm
+import matplotlib.animation as animation
 import time
 import random
 
 import tensorflow as tf
 from tensorflow import keras
-from keras import layers, models
-
-
-class Trade():
-    def __init__(self, id=00,  time=0, qty = 0, price=0, side = '', open_qty = 0, dictclosedtrades = dict({}), profit = 0):
-        self.id = id
-        self.time = time
-        self.qty = qty
-        self.price = price
-        self.side = side
-
-        self.open_qty = open_qty
-        self.dictclosedtrades = dictclosedtrades
-        self.profit = profit
-
+from keras import layers, models, losses, optimizers, metrics, activations, callbacks
+from firstpart import Trade
 
 class MainWindow(QMainWindow, UiMainWindow):
 
@@ -96,12 +85,16 @@ class MainWindow(QMainWindow, UiMainWindow):
         filename, _ = QFileDialog.getOpenFileName(self, "Open File", "./data/", "CSV file (*.csv)")
         df = pd.read_csv(filename, dtype='float64')
         df_add = df['maxof']
-        d = 0.02
+        d = 0.007
         bins = [0, d, math.inf]
         t1 = time.time()
+
+        a = pd.cut(df_add, bins=bins, labels=[0, 1])
+        print(a.value_counts(normalize=True))
+
         df['maxof_class'] = pd.cut(df_add, bins=bins, labels=[0, 1])
         t = time.time() - t1
-        print(t, df.shape)
+        print(t, df.shape, df.value_counts())
         df.to_csv('./data/' + self.filename + '_quantMAXOF_' + str(d) + '.csv', index=False)
 
 
@@ -137,83 +130,242 @@ class MainWindow(QMainWindow, UiMainWindow):
         print(t, df.shape)
         df.to_csv('./data/' + self.filename + '_quantfrac_' + str(lastinterval) + '.csv', index=False)
 
-    def trainNN_triggered(self):
+    def prepairNN_triggered(self):
         f1, _ = QFileDialog.getOpenFileName(self, "Open _quantMAXOF_ ", "./data/", "CSV file (*.csv)")
         f2, _ = QFileDialog.getOpenFileName(self, "Open _quantfrac_ ", "./data/", "CSV file (*.csv)")
         t1 = time.time()
         df1 = pd.read_csv(f1, dtype='float64')
         df2 = pd.read_csv(f2, dtype='float64')
         df = pd.merge(left=df1, right=df2, left_on='time', right_on='time')
+        df = df[['time', 'a', 'b', 'sigma', 'maxof_class']]
         t = time.time() - t1
-        print(t, df.shape)
+        print(t, df.shape, df.columns)
         df.to_csv('./data/' + self.filename + '_forNN_.csv', index=False)
 
-   # ------------------------------------------------------------------------
+    def trainNN_triggered(self):
 
-    def pb_nn_clicked(self):
-        # number;time;open;hmax;lmin;MAXOPEN;MINOPEN;a;b;sigma;ADD;ADD Номер интервала;DIFF;DIFF Номер интервала;MAXOF;MAXOF Номер интервала;DIFFMAXOF;DIFFMAXOF Номер интервала
-        preliminarydata = np.genfromtxt('./data/Quant.csv', delimiter=';', dtype='float32')
-        print('Входные данные: ', preliminarydata.shape)
+        def splitwindows(past, future, x):
+            n = x.shape[0] - past - future + 1
+            xout = np.zeros((n, past, x.shape[1]))
+            for i in range(n):
+                xout[i] = x[i:i + past]
+            return xout
 
-        prex = preliminarydata[:, 7]
-        prey = preliminarydata[:, 15]
+        def model1():
+            input_layer = layers.Input(shape=(xtrain.shape[1], xtrain.shape[2]))
+            x = layers.Flatten()(input_layer)
 
-        past = 120
-        future = 1
-        learning_rate = 0.001
-        n = preliminarydata.shape[0] - past - future + 1
-        x = np.zeros((n, past))
-        y = prey[past - future + 1:]
-        y = keras.utils.to_categorical(y)
-        for i in range(n):
-            x[i] = prex[i:i + past]
+            x = layers.Dense(units=20)(x)
+            x = layers.BatchNormalization()(x)
+            x = layers.ELU()(x)
+
+            x = layers.Dense(units=20)(x)
+            x = layers.BatchNormalization()(x)
+            x = layers.ELU()(x)
+
+            x = layers.Dense(units=20)(x)
+            x = layers.BatchNormalization()(x)
+            x = layers.ELU()(x)
+
+            x = layers.Dropout(rate=0.25)(x)
+
+            output_layer = layers.Dense(units=1, activation='sigmoid')(x)
+            model = models.Model(input_layer, output_layer)
+            model.compile(optimizer=optimizers.RMSprop(),
+                          loss=losses.BinaryCrossentropy(),
+                          metrics=metrics.BinaryAccuracy())
+            model.summary()
+            return model
+
+        def model2():
+            input_layer = layers.Input(shape=(xtrain.shape[1], xtrain.shape[2]))
+            x = layers.Conv1D(filters=64,
+                              kernel_size=15,
+                              strides=1,
+                              padding='same',
+                              activation='relu')(input_layer)
+            x = layers.Conv1D(filters=64,
+                              kernel_size=7,
+                              strides=1,
+                              padding='valid',
+                              activation='relu')(x)
+            x = layers.MaxPooling1D(pool_size=3)(x)
+            x = layers.Conv1D(filters=64,
+                              kernel_size=5,
+                              strides=1,
+                              padding='valid',
+                              activation='relu')(x)
+            x = layers.GlobalMaxPooling1D()(x)
+            output_layer = layers.Dense(units=1,
+                             activation='sigmoid')(x)
+            model = models.Model(input_layer, output_layer)
+            model.compile(optimizer=optimizers.RMSprop(),
+                          loss=losses.BinaryCrossentropy(),
+                          metrics=metrics.BinaryAccuracy())
+            model.summary()
+            return model
+
+        def model3():
+            input_layer = layers.Input(shape=(xtrain.shape[1], xtrain.shape[2]))
+            x = layers.Conv1D(filters=64,
+                              kernel_size=15,
+                              strides=1,
+                              padding='same',
+                              activation='relu')(input_layer)
+            x = layers.MaxPooling1D(pool_size=3)(x)
+            x = layers.Conv1D(filters=32,
+                              kernel_size=7,
+                              strides=1,
+                              padding='valid',
+                              activation='relu')(x)
+            x = layers.MaxPooling1D(pool_size=3)(x)
+            x = layers.LSTM(32,
+                           dropout=0.1,
+                           recurrent_dropout=0.5)(x)
+            output_layer = layers.Dense(units=1,
+                                        activation='sigmoid')(x)
+            model = models.Model(input_layer, output_layer)
+            model.compile(optimizer=optimizers.RMSprop(),
+                          loss=losses.BinaryCrossentropy(),
+                          metrics=metrics.BinaryAccuracy())
+            model.summary()
+            return model
+
+
+        t1 = time.time()
+        df = pd.read_csv('./data/BTCUSDT-0521-0422-12month_forNN_.csv')
+        x = df[['a', 'b', 'sigma']].astype(dtype='float64')
+        y = df['maxof_class'].astype(dtype='int64')
         print(x.shape, y.shape)
 
-        split_fraction = 0.80
-        train_split = int(split_fraction * int(x.shape[0]))
-        x_train = x[:train_split]
-        x_mean = np.mean(x_train)
-        x_train -= x_mean
-        x_std = np.std(x_train)
-        x_train /= x_std
-        y_train = y[:train_split]
-        # y_mean = np.mean(y_train)
-        # y_train -= y_mean
-        # y_std = np.std(y_train)
-        # y_train /= y_std
-        x_test = x[train_split:]
-        x_test -= x_mean
-        x_test /= x_std
-        y_test = y[train_split:]
-        # y_test -= y_mean
-        # y_test /= y_std
+        split_fraction = 0.50
+        split_index = int(split_fraction * int(x.shape[0]))
+        xtrain = x[:split_index]
+        ytrain = y[:split_index]
+        xtest = x[split_index:]
+        ytest = y[split_index:]
 
-        model = models.Sequential()
-        model.add(layers.Dense(27, input_shape=(x_train.shape[1],), activation='relu'))
-        model.add(layers.Dense(18, activation='relu'))
-        model.add(layers.Dense(9, activation='softmax'))
-        model.compile(optimizer='rmsprop',
-                        loss='categorical_crossentropy',
-                        metrics=['accuracy'])
-        model.summary()
+        past = 60
+        future = 1
+        xtrain = splitwindows(past, future, xtrain)
+        print(xtrain.shape)
+        ytrain = ytrain[past:]
+        print(ytrain.shape)
+        xtest = splitwindows(past, future, xtest)
+        print(xtest.shape)
+        ytest = ytest[past:]
+        print(ytest.shape)
+        t = time.time() - t1
+        print(t)
+        # ++++++++++++++++++++++++++++++++++++++++++++
+        # model = model1()
+        model = model2()
+        # ++++++++++++++++++++++++++++++++++++++++++++
+        cb = [callbacks.TensorBoard(log_dir='tensor_log',
+                                    histogram_freq=1,
+                                    embeddings_freq=1)]
+        history = model.fit(xtrain,
+                            ytrain,
+                            batch_size=512,
+                            epochs=50,
+                            validation_data=(xtest, ytest),
+                            shuffle=False,
+                            callbacks=cb)
 
-        history = model.fit(
-            x_train,
-            y_train,
-            epochs=50,
-            validation_data=(x_test, y_test),
-            batch_size=2048)
+        # print(history.history.keys())
+        # loss = history.history['loss']
+        # val_loss = history.history['val_loss']
+        # acc_values = history.history['binary_accuracy']
+        # val_acc_values = history.history['val_binary_accuracy']
+        # epochs = range(1, len(loss) + 1)
+        # plt.plot(epochs, loss, 'bo', label='Training loss')
+        # plt.plot(epochs, val_loss, 'b', label='Validation loss')
+        # plt.plot(epochs, acc_values, 'bo', label='Training acc')
+        # plt.plot(epochs, val_acc_values, 'b', label='Validation acc')
+        # plt.title('Training and validation loss')
+        # plt.xlabel('Epochs')
+        # plt.ylabel('Loss')
+        # plt.legend()
+        # plt.show()
 
-        loss = history.history['loss']
-        val_loss = history.history['val_loss']
-        epochs = range(1, len(loss) + 1)
-        plt.plot(epochs, loss, 'bo', label='Training loss')
-        plt.plot(epochs, val_loss, 'b', label='Validation loss')
-        plt.title('Training and validation loss')
-        plt.xlabel('Epochs')
-        plt.ylabel('Loss')
-        plt.legend()
+
+
+    # ------------------------------------------------------------------------
+        #   функция считает фрактальные коэффициенты на массиве баров bars
+        #   для последних last баров
+        #   с коэффициентом укрупнения koef
+        #   так как изначально бары у нас минутные, то коэф. укрупнения означает расчет длля 5 минутных баров, если koef = 5 и т.д.
+    def quantfrac_triggered(self, bars, shift, koef, intervals):
+
+        def mnk(xlist, ylist):
+            n = np.size(xlist)
+            sx = np.sum(xlist)
+            sy = np.sum(ylist)
+            sxy = np.sum(np.multiply(xlist, ylist))
+            sxx = np.sum(np.square(xlist))
+            a = (n * sxy - sx * sy) / (n * sxx - sx * sx)
+            b = (sy - a * sx) / n
+            sigma = np.sum(np.square(np.subtract(ylist, a * xlist + b)))
+            return (a, b, sigma)
+
+        lastinterval = intervals[-1]
+        intervals_log = np.log(intervals)
+        curbar_index = bars.shape[0] - shift - 1
+        list_bar = bars[curbar_index - lastinterval * koef + 1:curbar_index + 1, [2, 3]]
+        vj = [np.sum(np.subtract(np.amax(np.reshape(list_bar[:, [0]], (interval * koef, -1)), axis=1),
+                                 np.amin(np.reshape(list_bar[:, [1]], (interval * koef, -1)), axis=1))) for
+              interval in intervals]
+        vj_log = np.log(vj)
+        (a, b, sigma) = mnk(intervals_log, vj_log)
+        x = [vj_log, a, b, sigma]
+        return x
+
+    def loadbars_2_triggered(self):
+        #   читает файлы, полученные с https://data.binance.vision/
+        #   формат файлов: CSV - файлы, значения разделенные запятыми,
+        #   значения полей слева направо:
+        #   Open time /	Open / High / Low / Close / Volume / Close time / Quote asset volume / Number of trades / Taker buy base asset volume / Taker buy quote asset volume / Ignore
+        listcol = [0, 1, 2, 3, 4, 5]  # Time / Open / High / Low / Close / Volume
+        filename = 'data/BTCUSDT-1m-2022-04.csv'
+        self.bars = np.genfromtxt(filename, delimiter=',')[:, listcol]
+        self.bars[:, 0] //= 1000
+        self.graphicsView.bararray = np.flip(self.bars, axis=0)
+        self.graphicsView.repaint()
+
+    def star_animation(self):
+        koefs = np.array([1, 2, 3, 5, 8, 13, 21, 34, 55, 89])
+        koefs_logs = np.log(koefs)
+        intervals = np.array([1, 2, 4, 8, 16, 32])
+        intervals_log = np.log(intervals)
+        x, y = np.meshgrid(intervals_log, koefs_logs)
+        z = np.zeros((koefs.shape[0], intervals.shape[0]))
+        count_frames = 200
+        fr = np.zeros((count_frames, koefs.shape[0], intervals.shape[0]))
+
+        t1 = time.time()
+        for shift in range(count_frames):
+            for index, koef in enumerate(koefs):
+                res = self.quantfrac_triggered(self.bars, shift, koef, intervals)
+                z[index] = res[0]
+            fr[shift] = z
+            t = self.bars[-1-shift, 0]
+        t = time.time() - t1
+        print(t)
+        print(fr.shape)
+
+        fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
+        def animate(i):
+            ax.clear()
+            ax.plot_surface(x, y, fr[i], cmap=cm.coolwarm,
+                            linewidth=0, antialiased=True)
+            ax.set_zlim(5, 15)
+            self.graphicsView.currentbartime = self.bars[-1-i,0]
+            self.graphicsView.repaint()
+
+        self.ani = animation.FuncAnimation(fig, animate, frames=range(count_frames), interval=100)
         plt.show()
+    # ------------------------------------------------------------------------
+
 
     def pb_frac_clicked(self):
 

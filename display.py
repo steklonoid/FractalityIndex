@@ -15,6 +15,7 @@ class DisplayField(QWidget):
         self.fractaluparray = np.zeros((0, 3))
         self.fractaldownarray = np.zeros((0, 3))
         self.tradearray = np.zeros((0, 6))  #   opentime / openpx / closetime / closepx / side / profit
+        self.currentbartime = 0
 
         self.rightshiftx = 40
         self.downaxe = 20
@@ -114,7 +115,10 @@ class DisplayField(QWidget):
                     painter.fillRect(QRectF(ax[i], aopen[i], barwidth, aclose[i] - aopen[i]), self.up_bar_brush)
                     painter.drawRect(QRectF(ax[i], aopen[i], barwidth, aclose[i] - aopen[i]))
                     painter.drawLine(QLineF(centerx, aopen[i], centerx, ahigh[i]))
-
+            # линия текущего бара
+            axcur = self.currentbartime * self.scalex + bx
+            centerx = axcur + barwidth / 2
+            painter.drawLine(QLineF(centerx, 0, centerx, self.height - self.downaxe))
             #   отрисовка фракталов
             painter.setPen(self.fractaluppen)
             a = self.fractaluparray[self.fractaluparray[:, 0] > lefttime]
